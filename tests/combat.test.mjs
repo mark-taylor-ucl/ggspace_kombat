@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {newMatch,updateMatch,startAttack,roundOutcome,FIGHTER_HEIGHT} from '../game/combat.js';
+const advance=(g,seconds,ai=false)=>{for(let n=0;n<Math.ceil(seconds*120);n++)updateMatch(g,{},1/120,ai);};
+const closeMatch=()=>{const g=newMatch(()=>.5);g.a.x=400;g.b.x=562;return g;};
+test('sprites reduced from 270 to 180 pixels',()=>assert.equal(FIGHTER_HEIGHT,180));
+test('no-input player cannot damage Colonel or win against active CPU',()=>{const g=newMatch(()=>.5);for(let n=0;n<240*60&&g.state!=='over';n++){updateMatch(g,{},1/60,true);assert.equal(g.b.hp,100);assert.equal(g.playerDamage,0);}assert.equal(g.state,'over');assert.deepEqual(g.score,[0,2]);assert.equal(g.playerAttacks,0);});
+test('punch wind-up causes no damage; contact hits once',()=>{const g=closeMatch();startAttack(g.a,'punch');advance(g,.10);assert.equal(g.b.hp,100);advance(g,.10);assert.equal(g.b.hp,90);advance(g,2);assert.equal(g.b.hp,90);});
+test('missed punch at long range causes no damage',()=>{const g=newMatch();startAttack(g.a,'punch');advance(g,2);assert.equal(g.b.hp,100);});
+test('kick causes exactly 16 damage once',()=>{const g=closeMatch();startAttack(g.a,'kick');advance(g,2);assert.equal(g.b.hp,84);});
+test('guard blocks all damage',()=>{const g=closeMatch();g.b.guard=3;startAttack(g.a,'punch');advance(g,1);assert.equal(g.b.hp,100);});
+test('airborne opponent outside strike height avoids damage',()=>{const g=closeMatch();g.b.y=170;startAttack(g.a,'punch');advance(g,.25);assert.equal(g.b.hp,100);});
+test('attack facing away cannot hit opponent behind it',()=>{const g=closeMatch();g.a.face=-1;startAttack(g.a,'punch');advance(g,1);assert.equal(g.b.hp,100);});
+test('KO winner is surviving fighter',()=>{const g=closeMatch();g.b.hp=8;startAttack(g.a,'punch');advance(g,.4);assert.equal(g.b.hp,0);assert.deepEqual(g.result,{reason:'KO',winner:0});assert.deepEqual(g.score,[1,0]);});
+test('time up uses health and ties draw; never calls it a KO',()=>{const g=newMatch();g.clock=0;assert.deepEqual(roundOutcome(g),{reason:'TIME UP',winner:null});g.a.hp=80;assert.deepEqual(roundOutcome(g),{reason:'TIME UP',winner:1});});
+test('Immortalise Him triggers once at one-punch health and resets next round',()=>{const g=closeMatch();g.b.hp=20;startAttack(g.a,'punch');advance(g,.5);assert.equal(g.b.hp,10);assert.equal(g.finisherSerial,1);assert.equal(g.finisherShown,true);advance(g,1);assert.equal(g.finisherSerial,1);g.a.x=400;g.b.x=562;startAttack(g.a,'punch');advance(g,3);assert.equal(g.round,2);assert.equal(g.finisherShown,false);assert.equal(g.finisherSerial,1);});
+test('KO skips finisher call and health never goes negative',()=>{const g=closeMatch();g.b.hp=16;startAttack(g.a,'kick');advance(g,.5);assert.equal(g.b.hp,0);assert.equal(g.finisherSerial,0);});
