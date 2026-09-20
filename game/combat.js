@@ -17,14 +17,14 @@ function move(f,axis,dt){f.anim+=dt;f.stun=Math.max(0,f.stun-dt);f.damageFlash=M
  f.vy+=1150*dt;f.y=Math.min(GROUND,f.y+f.vy*dt);if(f.y===GROUND)f.vy=0;
  if(f.attack){f.attack.age+=dt;const m=MOVES[f.attack.type];if(f.attack.age>=m.startup+m.active+m.recovery)f.attack=null;}
 }
-function hit(att,def){const box=attackBox(att);if(!box||!overlap(box,hurtbox(def)))return null;att.attack.hit=true;const m=MOVES[att.attack.type];const blocked=def.block&&def.y===GROUND&&def.face===-att.attack.face;const target=hurtbox(def);return {att,def,amount:blocked?0:m.damage,blocked,type:att.attack.type,face:att.attack.face,x:(Math.max(box.left,target.left)+Math.min(box.right,target.right))/2,y:(Math.max(box.top,target.top)+Math.min(box.bottom,target.bottom))/2};}
+function hit(att,def){const box=attackBox(att);if(!box||!overlap(box,hurtbox(def)))return null;att.attack.hit=true;const m=MOVES[att.attack.type];const blocked=def.block&&def.y===GROUND&&def.face===-att.attack.face;const target=hurtbox(def);return {strike:{...box},target:{...target},att,def,amount:blocked?0:m.damage,blocked,type:att.attack.type,face:att.attack.face,x:(Math.max(box.left,target.left)+Math.min(box.right,target.right))/2,y:(Math.max(box.top,target.top)+Math.min(box.bottom,target.bottom))/2};}
 export function roundOutcome(g){if(g.a.hp<=0||g.b.hp<=0)return {reason:'KO',winner:g.a.hp===g.b.hp?null:g.a.hp>g.b.hp?0:1};if(g.clock<=0)return {reason:'TIME UP',winner:g.a.hp===g.b.hp?null:g.a.hp>g.b.hp?0:1};return null;}
 function endRound(g,outcome){g.result=outcome;g.state='pause';g.freeze=2.4;g.a.attack=null;g.b.attack=null;g.a.block=false;g.b.block=false;if(outcome.winner!==null)g.score[outcome.winner]++;g.message=outcome.reason+' · '+(outcome.winner===null?'DRAW':outcome.winner===0?'BOLT WINS ROUND':'THE COLONEL WINS ROUND');}
 export function updateMatch(g,input,dt,aiEnabled=true){
  g.finisherTime=Math.max(0,g.finisherTime-dt);
  g.events=g.events.map(e=>({...e,life:e.life-dt})).filter(e=>e.life>0);
  if(g.state==='over')return;
- if(g.state==='pause'){g.freeze-=dt;if(g.freeze<=0){if(Math.max(...g.score)>=2||g.round>=3){g.state='over';g.message=g.score[0]===g.score[1]?'MATCH DRAW':(g.score[0]>g.score[1]?'BOLT':'THE COLONEL')+' WINS MATCH';}else{g.round++;g.a=fighter(225,'bolt');g.b=fighter(735,'colonel');g.clock=90;g.finisherShown=false;g.finisherTime=0;g.state='playing';g.message='ROUND '+g.round+' · FIGHT!';}}return;}
+ if(g.state==='pause'){g.freeze-=dt;if(g.freeze<=0){if(Math.max(...g.score)>=2||g.round>=3){g.state='over';g.message=g.score[0]===g.score[1]?'MATCH DRAW':(g.score[0]>g.score[1]?'BOLT':'THE COLONEL')+' WINS MATCH';}else{g.lastContact=null;g.round++;g.a=fighter(225,'bolt');g.b=fighter(735,'colonel');g.clock=90;g.finisherShown=false;g.finisherTime=0;g.state='playing';g.message='ROUND '+g.round+' · FIGHT!';}}return;}
  const a=g.a,b=g.b;g.clock=Math.max(0,g.clock-dt);
  if(!a.attack)a.face=a.x<b.x?1:-1;if(!b.attack)b.face=b.x<a.x?1:-1;
  a.block=!!input.block&&a.y===GROUND&&!a.attack&&a.stun===0;
@@ -37,7 +37,7 @@ export function updateMatch(g,input,dt,aiEnabled=true){
  const gap=Math.abs(a.x-b.x);if(gap<158&&Math.abs(a.y-b.y)<130){const side=a.x<b.x?-1:1,push=(158-gap)/2;a.x=clamp(a.x+side*push,90,870);b.x=clamp(b.x-side*push,90,870);}
  // Collect contacts before applying damage, allowing genuine simultaneous hits.
  const contacts=[hit(a,b),hit(b,a)].filter(Boolean);
- for(const h of contacts){h.def.hp=clamp(h.def.hp-h.amount,0,100);h.def.damageFlash=.16;if(!h.blocked){h.def.stun=.2;h.def.attack=null;h.def.x=clamp(h.def.x+h.face*12,90,870);if(h.att===a)g.playerDamage+=h.amount;}
+ for(const h of contacts){g.lastContact={strike:h.strike,target:h.target,x:h.x,y:h.y,attacker:h.att.kind,type:h.type,amount:h.amount,blocked:h.blocked};h.def.hp=clamp(h.def.hp-h.amount,0,100);h.def.damageFlash=.16;if(!h.blocked){h.def.stun=.2;h.def.attack=null;h.def.x=clamp(h.def.x+h.face*12,90,870);if(h.att===a)g.playerDamage+=h.amount;}
  g.events.push({x:h.x,y:h.y,amount:h.amount,blocked:h.blocked,life:.65});g.message=(h.att.kind==='bolt'?'BOLT':'COLONEL')+' '+h.type.toUpperCase()+(h.blocked?' · BLOCKED':' · −'+h.amount);}
  const outcome=roundOutcome(g);if(outcome)endRound(g,outcome);else if(!g.finisherShown&&b.hp>0&&b.hp<=10){g.finisherShown=true;g.finisherSerial++;g.finisherTime=3;g.message='IMMORTALISE HIM!';}
 }

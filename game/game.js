@@ -1,3 +1,4 @@
+import {installDebug} from './debug.js';
 import {newMatch,updateMatch,currentPose,FIGHTER_HEIGHT} from './combat.js';
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
 const W=960,H=540,ground=430;
@@ -8,13 +9,14 @@ sprites.bolt.src='/game/bolt-sprites.png';sprites.colonel.src='/game/colonel-spr
 const start=document.getElementById('start'),status=document.getElementById('status'),board=document.getElementById('board');
 const keys=new Set(),pointers=new Map();let queuedAttack=null,jumpPressed=false,last=0,artReady=false,lastAnnounced=0,soundOn=true;
 let game=newMatch();game.state='ready';
+const debug=installDebug(start,clearInput);
 function readScores(){try{const r=JSON.parse(localStorage.getItem('ggsf-scores')||'[]');return Array.isArray(r)?r.filter(s=>typeof s.name==='string'&&Number.isFinite(s.wins)):[]}catch{return []}}
 function scores(){const rows=readScores();board.textContent=rows.length?'LOCAL BEST  '+rows.slice(0,5).map((s,i)=>`${i+1}. ${s.name} ${s.wins}`).join('   ·   '):'LOCAL BEST  —  BE FIRST TO WIN';}scores();
 function announce(text){if(!soundOn||!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const voice=new SpeechSynthesisUtterance(text);voice.lang='en-GB';voice.pitch=.55;voice.rate=.86;voice.volume=1;const voices=window.speechSynthesis.getVoices();voice.voice=voices.find(v=>/Daniel|George|David|Alex/.test(v.name)&&v.lang.startsWith('en'))||voices.find(v=>v.lang==='en-GB')||voices.find(v=>v.lang.startsWith('en'))||null;window.speechSynthesis.speak(voice);}
 const soundButton=document.getElementById('sound');soundButton.addEventListener('click',()=>{soundOn=!soundOn;soundButton.textContent=soundOn?'VOICE ON':'VOICE OFF';soundButton.setAttribute('aria-pressed',String(soundOn));if(soundOn)announce('Umpire ready.');else if('speechSynthesis' in window)window.speechSynthesis.cancel();});
 function clearInput(){keys.clear();pointers.clear();queuedAttack=null;jumpPressed=false;}
 function held(k){return keys.has(k)||[...pointers.values()].includes(k);}
-function begin(){if(!artReady)return;clearInput();lastAnnounced=0;announce('Round one. Fight!');game=newMatch();last=performance.now();document.getElementById('ready-art').hidden=true;canvas.hidden=false;document.getElementById('again').hidden=true;start.textContent='RESTART KOMBAT';status.textContent='FIGHT!';canvas.focus({preventScroll:true});}
+function begin(){if(!artReady)return;debug.used=debug.enabled;debug.paused=false;debug.step=false;document.getElementById('debug-pause').textContent='PAUSE';clearInput();lastAnnounced=0;announce('Round one. Fight!');game=newMatch();last=performance.now();document.getElementById('ready-art').hidden=true;canvas.hidden=false;document.getElementById('again').hidden=true;start.textContent='RESTART KOMBAT';status.textContent='FIGHT!';canvas.focus({preventScroll:true});}
 start.addEventListener('click',begin);document.getElementById('again').addEventListener('click',begin);
 start.disabled=true;start.textContent='LOADING FIGHTERS';
 Promise.all(Object.values(sprites).map(im=>im.decode())).then(()=>{artReady=true;start.disabled=false;start.textContent='START KOMBAT';status.textContent='READY TO KOMBAT'}).catch(()=>{status.textContent='Fighter artwork could not load. Refresh to try again.';start.textContent='ARTWORK UNAVAILABLE'});
@@ -44,11 +46,11 @@ function drawImpact(e){
  if(!e.blocked){ctx.font='bold 18px monospace';ctx.strokeText('−'+e.amount,0,28-age*20);ctx.fillText('−'+e.amount,0,28-age*20);}ctx.restore();
 }
 
-function tick(t){let dt=Math.min((t-last)/1000||0,.20);last=t;if(document.hidden){requestAnimationFrame(tick);return;}const input={move:(held('d')||held('arrowright')?1:0)-(held('a')||held('arrowleft')?1:0),block:held('l'),jump:jumpPressed,attack:queuedAttack};jumpPressed=false;queuedAttack=null;
+function tick(t){let dt=Math.min((t-last)/1000||0,.20);last=t;if(document.hidden){requestAnimationFrame(tick);return;}if(debug.enabled){dt=debug.step?1/60:debug.paused?0:dt*(debug.slow?.25:1);debug.step=false;}const input={move:(held('d')||held('arrowright')?1:0)-(held('a')||held('arrowleft')?1:0),block:held('l'),jump:jumpPressed,attack:queuedAttack};if(dt>0){jumpPressed=false;queuedAttack=null;}
  const was=game.state,previousRound=game.round;
  if(game.state!=='ready')while(dt>0){const step=Math.min(dt,1/60);updateMatch(game,input,step);input.attack=null;input.jump=false;dt-=step;if(game.round!==previousRound||game.state!==was){clearInput();break;}}
  if(game.state!=='ready')status.textContent=game.message;
  if(game.finisherSerial!==lastAnnounced){lastAnnounced=game.finisherSerial;announce('Immortalise him!');}
- if(was!=='over'&&game.state==='over'){document.getElementById('again').hidden=false;if(game.score[0]>game.score[1]){const rows=readScores();rows.push({name:'BOLT',wins:game.score[0]});try{localStorage.setItem('ggsf-scores',JSON.stringify(rows.slice(-5)))}catch{}scores();}}
- render();requestAnimationFrame(tick);
+ if(was!=='over'&&game.state==='over'){document.getElementById('again').hidden=false;if(!debug.used&&game.score[0]>game.score[1]){const rows=readScores();rows.push({name:'BOLT',wins:game.score[0]});try{localStorage.setItem('ggsf-scores',JSON.stringify(rows.slice(-5)))}catch{}scores();}}
+ render();debug.draw(ctx,game);requestAnimationFrame(tick);
 }requestAnimationFrame(tick);
