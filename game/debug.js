@@ -10,7 +10,8 @@ export function installDebug(anchor,clearInput){
   const panel=document.createElement('section');panel.id='debug-panel';panel.hidden=true;
   toggle.setAttribute('aria-controls',panel.id);
   panel.innerHTML='<p>CYAN: target · YELLOW: active strike · WHITE DASHED: last contact before knockback. Coordinates are arena pixels.</p><button type="button" id="debug-pause">PAUSE</button> <button type="button" id="debug-step">STEP 1/60s</button> <label><input type="checkbox" id="debug-slow"> Quarter speed</label><pre id="debug-readout" style="white-space:pre-wrap;text-align:left;font-size:12px"></pre>';
-  anchor.after(toggle,panel);
+  anchor.after(toggle);
+  document.querySelector('.controls').after(panel);
   const state={enabled:false,paused:false,step:false,slow:false,used:false};
   const pause=panel.querySelector('#debug-pause');
   toggle.onclick=()=>{state.enabled=!state.enabled;state.used ||= state.enabled;state.paused=false;state.step=false;clearInput();panel.hidden=!state.enabled;pause.textContent='PAUSE';toggle.textContent=state.enabled?'DEBUG ON':'DEBUG OFF';toggle.setAttribute('aria-pressed',String(state.enabled));};
